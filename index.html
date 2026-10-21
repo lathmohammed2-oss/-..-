@@ -1,0 +1,170 @@
+
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>EAX CONSOLE</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:15px;background:#080d16;font-family:Arial;color:#27394c}
+.app{max-width:1200px;margin:auto;border:4px solid #3977a8;border-radius:15px;overflow:hidden;background:#eaf0f7}
+header{background:linear-gradient(#21699f,#073052);color:white;padding:25px;font-size:22px;font-weight:bold}
+nav{display:grid;grid-template-columns:repeat(4,1fr)}
+nav button{padding:16px 4px;border:1px solid #bac8d5;font-size:15px}
+nav button:first-child{background:#17669f;color:white}
+main{padding:20px;display:grid;grid-template-columns:1fr 1fr;gap:20px}
+h2{font-size:20px;font-weight:normal}
+.card{background:white;border:1px solid #ccd7e1;border-radius:8px;padding:16px;margin:12px 0}
+label{display:block;margin:15px 0 7px}
+input[type=range]{width:100%;accent-color:#0879ec}
+input[type=checkbox]{accent-color:#0879ec}
+button,select{padding:12px;border:1px solid #bdcbd8;border-radius:5px;cursor:pointer}
+.preset{display:block;width:100%;text-align:right;margin:5px 0;background:#f0f0f0}
+.preset.active{background:#d6eaff;border-color:#1684d5}
+.primary{background:#1479dc;color:white}
+.status{margin-top:12px;color:#687989}
+footer{background:#061f35;color:white;text-align:center;padding:25px}
+.timer{font:30px monospace;color:#58e99b}
+.credit{color:#58e99b;margin-top:25px}
+@media(max-width:650px){main{grid-template-columns:1fr;padding:12px}header{font-size:17px}nav button{font-size:12px}}
+</style>
+</head>
+<body>
+<div class="app">
+<header>EAX CONSOLE | Sound Blaster Audio Engine</header>
+<nav>
+<button>✦ Effects</button><button>🎤 Karaoke</button>
+<button>CMSS 3D</button><button>Clean-up</button>
+</nav>
+<main>
+<section>
+<h2>Audio Effects - Silver Echo Engine</h2>
+<label><input id="enabled" type="checkbox" checked> Enable Audio Effects</label>
+<h3>Environment</h3>
+<div class="card" id="presets">
+<button class="preset" data-name="Cathedral">Cathedral</button>
+<button class="preset" data-name="Chapel">Chapel</button>
+<button class="preset active" data-name="Church">Church</button>
+<button class="preset" data-name="Concert Hall">Concert Hall</button>
+<button class="preset" data-name="Garage">Garage</button>
+<button class="preset" data-name="Haunted Cave">Haunted Cave</button>
+</div>
+Active Preset: <b id="active">Church</b>
+</section>
+<section>
+<div class="card">
+<strong>Effects Amount: <span id="amountText">100%</span></strong>
+<input id="amount" type="range" min="0" max="100" value="100">
+</div>
+<div class="card">
+<h3>🎙 Mic Passthrough</h3>
+<p>Hear the microphone with echo.</p>
+<button class="primary" id="mic">Enable Mic</button>
+<div class="status" id="status">Microphone is off.</div>
+</div>
+<label>Audio Source</label>
+<select id="source"><option>Microphone</option><option>Test tone</option></select>
+<div class="card">
+<label>Echo / Reverb</label>
+<input id="echo" type="range" min="0" max="100" value="75">
+<label>Output level</label>
+<input id="volume" type="range" min="0" max="200" value="120">
+<label>Whistle / Squeal</label>
+<input id="pitch" type="range" min="1000" max="5000" value="3000">
+<button id="whistle">Play Whistle</button>
+<button id="stopWhistle">Stop Whistle</button>
+<div class="status" id="whistleStatus">Whistle is off.</div>
+</div>
+<button id="demo">▶ Play Demo</button>
+<button id="stopDemo">■ Stop</button>
+</section>
+</main>
+<footer>
+<div class="timer" id="timer">● 00:00:00</div>
+<button id="start">▶ Start</button>
+<button id="pause">Ⅱ Pause</button>
+<button id="reset">■ Reset</button>
+<div class="credit">CREATIVE<br><br>تم تطويره من قبل ليث</div>
+</footer>
+</div>
+<script>
+let ctx,stream,source,gain,delay,feedback,wet,dry,out,osc,oscGain;
+let elapsed=0,last=0,clock=null;
+const $=id=>document.getElementById(id);
+const presets={
+"Cathedral":[.48,.68,.95],
+"Chapel":[.34,.48,.78],
+"Church":[.27,.58,.82],
+"Concert Hall":[.38,.42,.72],
+"Garage":[.12,.3,.5],
+"Haunted Cave":[.62,.72,1]
+};
+function audio(){
+if(!ctx)ctx=new(window.AudioContext||window.webkitAudioContext)();
+return ctx;
+}
+function connect(input){
+const c=audio();
+const comp=c.createDynamicsCompressor();
+comp.threshold.value=-20;comp.ratio.value=5;
+gain=c.createGain();delay=c.createDelay(1);
+feedback=c.createGain();wet=c.createGain();
+dry=c.createGain();out=c.createGain();
+input.connect(comp);
+comp.connect(gain);
+gain.connect(dry);dry.connect(out);
+gain.connect(delay);delay.connect(wet);wet.connect(out);
+delay.connect(feedback);feedback.connect(delay);
+out.connect(c.destination);
+apply();
+}
+function apply(){
+if(!ctx||!out)return;
+const p=presets[$("active").textContent]||presets.Church;
+delay.delayTime.value=p[0];
+feedback.gain.value=Math.min(.82,p[1]*+$("amount").value/100);
+wet.gain.value=$("enabled").checked?p[2]*+$("echo").value/75*+$("amount").value/100:0;
+out.gain.value=+$("volume").value/100;
+$("amountText").textContent=$("amount").value+"%";
+}
+$("mic").onclick=async()=>{
+try{
+if(stream){
+stream.getTracks().forEach(t=>t.stop());stream=null;
+$("mic").textContent="Enable Mic";$("status").textContent="Microphone is off.";return;
+}
+audio();await ctx.resume();
+stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false}});
+source=ctx.createMediaStreamSource(stream);connect(source);
+$("mic").textContent="Disable Mic";
+$("status").textContent="Microphone is on. Use headphones.";
+}catch(e){$("status").textContent="Mic error: allow microphone permission and use HTTPS.";}
+};
+document.querySelectorAll(".preset").forEach(b=>b.onclick=()=>{
+document.querySelectorAll(".preset").forEach(x=>x.classList.remove("active"));
+b.classList.add("active");$("active").textContent=b.dataset.name;apply();
+});
+["enabled","amount","echo","volume"].forEach(id=>$(id).addEventListener("input",apply));
+function tone(freq,type="sine",level=.035){
+const c=audio();if(osc){try{osc.stop()}catch(e){}}
+osc=c.createOscillator();osc.type=type;osc.frequency.value=freq;
+oscGain=c.createGain();oscGain.gain.value=level;
+osc.connect(oscGain);oscGain.connect(c.destination);osc.start();
+}
+$("whistle").onclick=()=>{tone(+$("pitch").value,"sine",.04);$("whistleStatus").textContent="Whistle is on."};
+$("pitch").oninput=()=>{if(osc)osc.frequency.value=+$("pitch").value};
+function stopTone(){if(osc){try{osc.stop()}catch(e){}osc=null}}
+$("stopWhistle").onclick=()=>{stopTone();$("whistleStatus").textContent="Whistle is off."};
+$("demo").onclick=()=>tone(180,"sawtooth",.025);
+$("stopDemo").onclick=stopTone;
+function showTime(){
+let s=Math.floor(elapsed/1000);
+$("timer").textContent="● "+[Math.floor(s/3600),Math.floor(s%3600/60),s%60].map(n=>String(n).padStart(2,"0")).join(":");
+}
+$("start").onclick=()=>{if(clock)return;last=Date.now();clock=setInterval(()=>{elapsed+=Date.now()-last;last=Date.now();showTime()},500)};
+$("pause").onclick=()=>{clearInterval(clock);clock=null};
+$("reset").onclick=()=>{clearInterval(clock);clock=null;elapsed=0;showTime()};
+</script>
+</body>
+</html>
